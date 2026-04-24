@@ -11,8 +11,40 @@ export default function Budget() {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState(
+    typeof Notification !== "undefined" ? Notification.permission : "unsupported"
+  );
 
   const currentMonth = new Date().toISOString().slice(0, 7);
+
+  const requestNotificationPermission = async () => {
+    if (!("Notification" in window)) {
+      toast.error("Browser notifications are not supported");
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+
+    if (permission === "granted") {
+      toast.success("Notifications enabled 🔔");
+      new Notification("SpendSense Zero", {
+        body: "Budget alerts are now enabled.",
+      });
+    } else {
+      toast.error("Notifications permission denied");
+    }
+  };
+
+  const showBrowserNotification = (title, message) => {
+    if (!("Notification" in window)) return;
+
+    if (Notification.permission === "granted") {
+      new Notification(title, {
+        body: message,
+      });
+    }
+  };
 
   const playBudgetBeep = async () => {
     try {
@@ -36,7 +68,7 @@ export default function Budget() {
         oscillator.type = "sine";
         oscillator.frequency.value = frequency;
 
-        gainNode.gain.setValueAtTime(0.2, startTime);
+        gainNode.gain.setValueAtTime(0.22, startTime);
         gainNode.gain.exponentialRampToValueAtTime(
           0.001,
           startTime + duration
@@ -187,8 +219,19 @@ export default function Budget() {
 
       if (updatedProgress >= 100 || updatedRemaining < 0) {
         await playBudgetBeep();
+
+        showBrowserNotification(
+          "🚨 Budget Alert",
+          "You have exceeded your monthly budget!"
+        );
+
         toast.error("🚨 Budget exceeded! Please control your spending.");
       } else if (updatedProgress >= 90) {
+        showBrowserNotification(
+          "⚠️ Budget Warning",
+          "You have used more than 90% of your monthly budget."
+        );
+
         toast("⚠️ You have used 90%+ of your monthly budget.", {
           icon: "⚠️",
         });
@@ -236,17 +279,29 @@ export default function Budget() {
               Monthly Budget
             </h1>
             <p className="mt-2 text-slate-400">
-              Set your monthly budget and get a sound alert when spending goes
-              over limit.
+              Set your monthly budget and get toast, sound, and browser
+              notifications when spending goes over limit.
             </p>
           </div>
 
-          <Link
-            to="/dashboard"
-            className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-slate-200 hover:bg-white/10"
-          >
-            Back to Dashboard
-          </Link>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {notificationPermission !== "granted" && (
+              <button
+                type="button"
+                onClick={requestNotificationPermission}
+                className="rounded-xl border border-blue-500/20 bg-blue-500/10 px-5 py-3 text-sm font-medium text-blue-300 hover:bg-blue-500/20"
+              >
+                Enable Notifications 🔔
+              </button>
+            )}
+
+            <Link
+              to="/dashboard"
+              className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-slate-200 hover:bg-white/10"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
         </div>
 
         <div className="grid gap-6 md:grid-cols-3 mb-8">
@@ -316,6 +371,12 @@ export default function Budget() {
               </p>
             </div>
 
+            {notificationPermission === "granted" && (
+              <div className="rounded-xl border border-green-500/20 bg-green-500/10 p-4 text-green-300">
+                Browser notifications are enabled.
+              </div>
+            )}
+
             {actualProgress >= 90 && actualProgress < 100 && (
               <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/20 p-4 text-yellow-300">
                 ⚠️ Alert: You have used more than 90% of your monthly budget.
@@ -324,8 +385,8 @@ export default function Budget() {
 
             {remaining < 0 && (
               <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-red-300">
-                🚨 Warning: You have exceeded your monthly budget. Beep alert
-                will play when you save this budget.
+                🚨 Warning: You have exceeded your monthly budget. Beep and
+                notification will trigger when you save this budget.
               </div>
             )}
 
@@ -341,10 +402,17 @@ export default function Budget() {
               {remaining < 0 && (
                 <button
                   type="button"
-                  onClick={playBudgetBeep}
+                  onClick={async () => {
+                    await playBudgetBeep();
+                    showBrowserNotification(
+                      "🚨 Budget Alert",
+                      "This is a test budget notification."
+                    );
+                    toast.error("Test alert triggered 🚨");
+                  }}
                   className="rounded-xl border border-red-500/20 bg-red-500/10 px-6 py-3 font-semibold text-red-300 hover:bg-red-500/20"
                 >
-                  Test Alert Sound 🔊
+                  Test Alert 🔊
                 </button>
               )}
             </div>
