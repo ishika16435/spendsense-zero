@@ -330,6 +330,8 @@ export default function Dashboard() {
                     className={`h-full ${
                       actualBudgetPercent >= 100
                         ? "bg-red-500"
+                        : actualBudgetPercent >= 90
+                        ? "bg-yellow-500"
                         : "bg-gradient-to-r from-blue-500 to-violet-500"
                     }`}
                     style={{ width: `${budgetBarPercent}%` }}
@@ -348,9 +350,18 @@ export default function Dashboard() {
                 </div>
               )}
 
+              {actualBudgetPercent >= 90 &&
+                actualBudgetPercent < 100 &&
+                budgetAmount > 0 && (
+                  <div className="mt-4 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-yellow-300">
+                    ⚠️ You have used more than 90% of your monthly budget.
+                  </div>
+                )}
+
               {remainingBudget < 0 && budgetAmount > 0 && (
                 <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-red-300">
-                  Warning: You have exceeded your monthly budget.
+                  🚨 Warning: You have exceeded your monthly budget. Open Budget
+                  page to update your limit or review spending.
                 </div>
               )}
             </div>
@@ -542,7 +553,9 @@ export default function Dashboard() {
                       <div className="mt-1 flex flex-wrap gap-2 text-sm text-slate-400">
                         <span>{exp.date}</span>
                         <span>•</span>
-                        <span className="uppercase">{exp.payment_method}</span>
+                        <span className="uppercase">
+                          {exp.payment_method}
+                        </span>
                         <span>•</span>
                         <span>{exp.category_name || "Uncategorized"}</span>
                         {exp.mood && (

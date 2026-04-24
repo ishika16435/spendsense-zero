@@ -14,6 +14,50 @@ export default function Budget() {
 
   const currentMonth = new Date().toISOString().slice(0, 7);
 
+  const playBudgetBeep = async () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+
+      if (!AudioContext) {
+        console.log("AudioContext not supported");
+        return;
+      }
+
+      const audioContext = new AudioContext();
+
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
+
+      const playTone = (frequency, startTime, duration) => {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.type = "sine";
+        oscillator.frequency.value = frequency;
+
+        gainNode.gain.setValueAtTime(0.2, startTime);
+        gainNode.gain.exponentialRampToValueAtTime(
+          0.001,
+          startTime + duration
+        );
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.start(startTime);
+        oscillator.stop(startTime + duration);
+      };
+
+      const now = audioContext.currentTime;
+
+      playTone(900, now, 0.25);
+      playTone(650, now + 0.3, 0.3);
+    } catch (error) {
+      console.log("Beep sound error:", error);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -136,6 +180,20 @@ export default function Budget() {
         toast.success("Budget saved successfully ✅");
       }
 
+      const updatedBudgetValue = Number(budgetAmount);
+      const updatedRemaining = updatedBudgetValue - totalSpent;
+      const updatedProgress =
+        updatedBudgetValue > 0 ? (totalSpent / updatedBudgetValue) * 100 : 0;
+
+      if (updatedProgress >= 100 || updatedRemaining < 0) {
+        await playBudgetBeep();
+        toast.error("🚨 Budget exceeded! Please control your spending.");
+      } else if (updatedProgress >= 90) {
+        toast("⚠️ You have used 90%+ of your monthly budget.", {
+          icon: "⚠️",
+        });
+      }
+
       navigate("/dashboard");
     } catch (error) {
       console.log("Budget save error:", error);
@@ -178,7 +236,8 @@ export default function Budget() {
               Monthly Budget
             </h1>
             <p className="mt-2 text-slate-400">
-              Set your monthly budget and track remaining amount.
+              Set your monthly budget and get a sound alert when spending goes
+              over limit.
             </p>
           </div>
 
@@ -244,29 +303,51 @@ export default function Budget() {
                   className={`h-full ${
                     actualProgress >= 100
                       ? "bg-red-500"
+                      : actualProgress >= 90
+                      ? "bg-yellow-500"
                       : "bg-gradient-to-r from-blue-500 to-violet-500"
                   }`}
                   style={{ width: `${progressBarWidth}%` }}
                 />
               </div>
+
               <p className="mt-2 text-sm text-slate-400">
                 {actualProgress.toFixed(1)}% used
               </p>
             </div>
 
-            {remaining < 0 && (
-              <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-red-300">
-                Warning: You have exceeded your monthly budget.
+            {actualProgress >= 90 && actualProgress < 100 && (
+              <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/20 p-4 text-yellow-300">
+                ⚠️ Alert: You have used more than 90% of your monthly budget.
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-6 py-3 font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {saving ? "Saving..." : "Save Budget"}
-            </button>
+            {remaining < 0 && (
+              <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-red-300">
+                🚨 Warning: You have exceeded your monthly budget. Beep alert
+                will play when you save this budget.
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-6 py-3 font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {saving ? "Saving..." : "Save Budget"}
+              </button>
+
+              {remaining < 0 && (
+                <button
+                  type="button"
+                  onClick={playBudgetBeep}
+                  className="rounded-xl border border-red-500/20 bg-red-500/10 px-6 py-3 font-semibold text-red-300 hover:bg-red-500/20"
+                >
+                  Test Alert Sound 🔊
+                </button>
+              )}
+            </div>
           </form>
         </div>
       </div>
