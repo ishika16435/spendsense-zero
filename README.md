@@ -28,7 +28,7 @@ A full-stack personal finance tracker built using React and Django REST Framewor
 ---
 
 ## 📸 Screenshots
-![Dashboard](screenshots/dashboard.png)
+![Dashboard](Dashboard.png)
 
 ## ▶️ Demo
 
