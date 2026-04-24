@@ -1,0 +1,275 @@
+import { useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
+import { Link, useNavigate } from "react-router-dom";
+import api from "../services/api";
+
+export default function Budget() {
+  const navigate = useNavigate();
+
+  const [budgetAmount, setBudgetAmount] = useState("");
+  const [budgets, setBudgets] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = localStorage.getItem("access");
+
+        if (!token) {
+          toast.error("Please login again");
+          navigate("/");
+          return;
+        }
+
+        const [budgetRes, expenseRes] = await Promise.all([
+          api.get("budgets/", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          api.get("expenses/", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+        setBudgets(budgetRes.data);
+        setExpenses(expenseRes.data);
+
+        const currentBudget = budgetRes.data.find(
+          (b) => b.month === currentMonth
+        );
+
+        if (currentBudget) {
+          setBudgetAmount(currentBudget.amount);
+        }
+      } catch (error) {
+        console.log("Budget fetch error:", error);
+
+        if (error.response?.status === 401) {
+          localStorage.clear();
+          toast.error("Session expired. Please login again.");
+          navigate("/");
+        } else {
+          toast.error("Could not load budget data");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [navigate, currentMonth]);
+
+  const currentMonthExpenses = useMemo(() => {
+    return expenses.filter((exp) => exp.date.startsWith(currentMonth));
+  }, [expenses, currentMonth]);
+
+  const totalSpent = useMemo(() => {
+    return currentMonthExpenses.reduce(
+      (sum, item) => sum + Number(item.amount),
+      0
+    );
+  }, [currentMonthExpenses]);
+
+  const currentBudgetValue = Number(budgetAmount || 0);
+  const remaining = currentBudgetValue - totalSpent;
+
+  const actualProgress =
+    currentBudgetValue > 0 ? (totalSpent / currentBudgetValue) * 100 : 0;
+
+  const progressBarWidth =
+    currentBudgetValue > 0 ? Math.min(actualProgress, 100) : 0;
+
+  const handleSaveBudget = async (e) => {
+    e.preventDefault();
+
+    if (!budgetAmount || Number(budgetAmount) <= 0) {
+      toast.error("Please enter a valid budget amount");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const token = localStorage.getItem("access");
+
+      if (!token) {
+        toast.error("Please login again");
+        navigate("/");
+        return;
+      }
+
+      const existingBudget = budgets.find((b) => b.month === currentMonth);
+
+      if (existingBudget) {
+        const res = await api.put(
+          `budgets/${existingBudget.id}/`,
+          {
+            month: currentMonth,
+            amount: Number(budgetAmount),
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        setBudgets((prev) =>
+          prev.map((item) => (item.id === existingBudget.id ? res.data : item))
+        );
+
+        toast.success("Budget updated successfully ✅");
+      } else {
+        const res = await api.post(
+          "budgets/",
+          {
+            month: currentMonth,
+            amount: Number(budgetAmount),
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        setBudgets((prev) => [...prev, res.data]);
+        toast.success("Budget saved successfully ✅");
+      }
+
+      navigate("/dashboard");
+    } catch (error) {
+      console.log("Budget save error:", error);
+
+      if (error.response?.status === 401) {
+        localStorage.clear();
+        toast.error("Session expired. Please login again.");
+        navigate("/");
+      } else if (error.response?.data?.amount?.[0]) {
+        toast.error(error.response.data.amount[0]);
+      } else if (error.response?.data?.month?.[0]) {
+        toast.error(error.response.data.month[0]);
+      } else if (error.response?.data?.detail) {
+        toast.error(error.response.data.detail);
+      } else {
+        toast.error("Could not save budget");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        Loading budget...
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white relative overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.14),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(168,85,247,0.16),_transparent_28%)]" />
+
+      <div className="relative z-10 mx-auto max-w-6xl px-6 py-10 lg:px-10">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm text-slate-400">Budget Planning</p>
+            <h1 className="mt-2 text-3xl font-bold sm:text-4xl">
+              Monthly Budget
+            </h1>
+            <p className="mt-2 text-slate-400">
+              Set your monthly budget and track remaining amount.
+            </p>
+          </div>
+
+          <Link
+            to="/dashboard"
+            className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-slate-200 hover:bg-white/10"
+          >
+            Back to Dashboard
+          </Link>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-3 mb-8">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-lg">
+            <p className="text-sm text-slate-400">Budget</p>
+            <h3 className="mt-2 text-3xl font-bold">
+              ₹{currentBudgetValue.toFixed(2)}
+            </h3>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-lg">
+            <p className="text-sm text-slate-400">Spent</p>
+            <h3 className="mt-2 text-3xl font-bold">
+              ₹{totalSpent.toFixed(2)}
+            </h3>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-lg">
+            <p className="text-sm text-slate-400">Remaining</p>
+            <h3
+              className={`mt-2 text-3xl font-bold ${
+                remaining < 0 ? "text-red-400" : "text-green-400"
+              }`}
+            >
+              ₹{remaining.toFixed(2)}
+            </h3>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-xl">
+          <h2 className="text-2xl font-bold mb-6">
+            Set Budget for {currentMonth}
+          </h2>
+
+          <form onSubmit={handleSaveBudget} className="space-y-6">
+            <div>
+              <label className="mb-2 block text-sm text-slate-300">
+                Budget Amount
+              </label>
+              <input
+                type="number"
+                value={budgetAmount}
+                onChange={(e) => setBudgetAmount(e.target.value)}
+                placeholder="Enter monthly budget"
+                className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-blue-500"
+                required
+              />
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm text-slate-300">Budget Usage</p>
+              <div className="h-4 w-full rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className={`h-full ${
+                    actualProgress >= 100
+                      ? "bg-red-500"
+                      : "bg-gradient-to-r from-blue-500 to-violet-500"
+                  }`}
+                  style={{ width: `${progressBarWidth}%` }}
+                />
+              </div>
+              <p className="mt-2 text-sm text-slate-400">
+                {actualProgress.toFixed(1)}% used
+              </p>
+            </div>
+
+            {remaining < 0 && (
+              <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-red-300">
+                Warning: You have exceeded your monthly budget.
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-6 py-3 font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {saving ? "Saving..." : "Save Budget"}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
